@@ -1,0 +1,17 @@
+﻿name: Terraform CI
+on: [push, pull_request]
+jobs:
+  tf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+      - name: fmt
+        run: terraform fmt -check -recursive
+      - name: validate
+        working-directory: envs/prod
+        run: |
+          terraform init -backend=false
+          terraform validate

@@ -1,0 +1,28 @@
+﻿# cloudbuild/orchestrator.yaml
+timeout: "1800s"
+substitutions:
+  _REGION: "us-central1"
+  _AR_REPO: "sanctra-docker"
+  _IMAGE: "sanctra-orchestrator"
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -t
+    - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA
+    - .
+- name: gcr.io/cloud-builders/docker
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+    - run
+    - deploy
+    - ${_IMAGE}
+    - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA
+    - --region=${_REGION}
+    - --allow-unauthenticated
+images:
+- ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA

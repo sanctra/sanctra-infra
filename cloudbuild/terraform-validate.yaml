@@ -1,0 +1,12 @@
+# cloudbuild/terraform-validate.yaml
+timeout: "1200s"
+steps:
+- name: hashicorp/terraform:1.8.5
+  entrypoint: sh
+  dir: envs/prod
+  args:
+    - -lc
+    - |
+      terraform init -input=false
+      terraform validate
+      terraform plan -input=false

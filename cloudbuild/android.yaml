@@ -1,0 +1,28 @@
+# cloudbuild/android.yaml
+# NOTE: Requires the Android repo to include a Gradle wrapper and SDK configuration.
+timeout: "3600s"
+substitutions:
+  _APK_BUCKET: "gs://avatars-renders/android-builds"
+steps:
+- name: gcr.io/cloud-builders/git
+  entrypoint: bash
+  args: ['-lc','echo "Android build starting"']
+
+# Use a community image with Android SDK + NDK preinstalled, or replace with your own builder image.
+- name: gcr.io/android-build-helpers/gradle
+  entrypoint: bash
+  args: ['-lc','chmod +x ./gradlew && ./gradlew assembleRelease']
+
+- name: gcr.io/cloud-builders/gsutil
+  args:
+    - -m
+    - rsync
+    - -r
+    - app/build/outputs/
+    - ${_APK_BUCKET}/$SHORT_SHA/
+
+artifacts:
+  objects:
+    location: ${_APK_BUCKET}/$SHORT_SHA/
+    paths:
+      - app/build/outputs/**/*.apk
