@@ -11,3 +11,7 @@ output "avatar_instance_template" { value = module.mig_avatar.instance_template 
 
 output "vertex_index_id"         { value = google_vertex_ai_index.sanctra.id }
 output "vertex_index_endpoint"   { value = google_vertex_ai_index_endpoint.sanctra.id }
+
+output "tts_instance_template" {
+  value = module.mig_tts.instance_template
+}

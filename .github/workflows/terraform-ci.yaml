@@ -1,17 +1,97 @@
-﻿name: Terraform CI
-on: [push, pull_request]
+﻿name: Infra CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  WORKDIR: envs/prod
+
 jobs:
-  tf:
+  plan:
     runs-on: ubuntu-latest
+    concurrency:
+      group: infra-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github
+          service_account: github-ci@sanctra.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: sanctra
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform fmt
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform init
+
+      - name: Terraform validate
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: ${{ env.WORKDIR }}
+        run: terraform plan -out=tfplan.bin
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: ${{ env.WORKDIR }}/tfplan.bin
+
+  # Optional guarded apply job. Requires an environment named "prod" with required reviewers.
+  apply:
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && false)
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github
+          service_account: github-ci@sanctra.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: sanctra
+
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
-      - name: fmt
-        run: terraform fmt -check -recursive
-      - name: validate
+          terraform_version: 1.8.5
+
+      - name: Terraform init
         working-directory: envs/prod
-        run: |
-          terraform init -backend=false
-          terraform validate
+        run: terraform init
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: envs/prod
+
+      - name: Terraform apply
+        working-directory: envs/prod
+        run: terraform apply -auto-approve tfplan.bin

@@ -23,3 +23,13 @@ variable "avatar_image"       { type = string default = "us-central1-docker.pkg.
 # Vertex AI
 variable "vertex_display_name" { type = string default = "sanctra-index" }
 variable "vertex_embedding_model" { type = string default = "textembedding-gecko@003" }
+
+
+variable "asr_image" { type = string }          # already referenced by MIG
+variable "avatar_image" { type = string }       # already referenced by MIG
+
+variable "tts_image" {
+  type    = string
+  default = "us-central1-docker.pkg.dev/${var.project_id}/sanctra-docker/sanctra-tts-gpu:latest"
+}
+

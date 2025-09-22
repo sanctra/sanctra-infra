@@ -1,0 +1,13 @@
+# cloudbuild/tts-gpu.yaml
+timeout: "3600s"
+substitutions:
+  _REGION: "us-central1"
+  _AR_REPO: "sanctra-docker"
+  _IMAGE: "sanctra-tts-gpu"
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ['build','-f','Dockerfile.gpu','-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA','.']
+- name: gcr.io/cloud-builders/docker
+  args: ['push','${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA']
+images:
+- ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA

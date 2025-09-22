@@ -54,10 +54,7 @@ module "bucket_logs" {
 }
 
 # Secrets
-module "secret_elevenlabs" {
-  source = "../../modules/secret"
-  name   = "ELEVENLABS_API_KEY"
-}
+
 module "secret_gemini" {
   source = "../../modules/secret"
   name   = "GEMINI_API_KEY"
@@ -65,20 +62,26 @@ module "secret_gemini" {
 
 # Cloud Run services
 module "run_orchestrator" {
-  source                  = "../../modules/cloud_run_service"
+  source                  = "././modules/cloud_run_service"
   name                    = "sanctra-orchestrator"
   region                  = var.region
   image                   = var.orchestrator_image
-  allow_unauth            = true # Keep orchestrator public for clients
+  allow_unauth            = true
   port                    = 8080
   env = {
     AVATAR_RENDERS_BUCKET = module.bucket_renders.name
     RAG_SERVICE_URL       = module.run_rag.uri
-    # TODO: Add ASR and Avatar service URLs once they are exposed via a load balancer
+    # NEW: wire upstreams (replace with your LB URLs or internal DNS names)
+    ASR_SERVICE_URL       = "ws://asr-gpu.internal.sanctra:9000"
+    AVATAR_SERVICE_URL    = "http://avatar-gpu.internal.sanctra:9100"
+    TTS_SERVICE_HTTP_URL  = "http://tts-gpu.internal.sanctra:9200"
+    TTS_SERVICE_WS_URL    = "ws://tts-gpu.internal.sanctra:9200"
+    AVATAR_UPLOADS_BUCKET = module.bucket_uploads.name
   }
   service_account_email   = var.run_sa_email
   labels                  = { app = "sanctra", svc = "orchestrator" }
 }
+
 
 module "run_rag" {
   source       = "../../modules/cloud_run_service"
@@ -121,6 +124,34 @@ module "mig_asr" {
   labels                  = { app = "sanctra", svc = "asr" }
 }
 
+# TTS GPU MIG
+module "tts_gpu" {
+  source       = "../../modules/gpu_mig"
+  project_id   = var.project_id
+  region       = var.region
+  zone         = var.zone
+  name         = "sanctra-tts-gpu"
+  machine_type = "g2-standard-4"            # L4 GPU family often maps to g2.* on GCP
+  gpu_type     = "nvidia-l4"                # adjust if your module expects enum
+  gpu_count    = 1
+  min_replicas = 1
+  max_replicas = 4
+  port         = 9200
+
+  # Container image pushed by cloudbuild/tts-gpu.yaml
+  container_image = "${var.region}-docker.pkg.dev/${var.project_id}/sanctra-docker/sanctra-tts-gpu:${var.image_tag}"
+
+  # Environment for the container
+  env = {
+    MODEL_NAME         = "tts_models/multilingual/multi-dataset/your_tts"
+    SAMPLE_RATE        = "24000"
+    DEVICE             = "cuda"
+  }
+
+  # Optional HTTP health check path
+  health_check_path = "/healthz"
+}
+
 module "mig_avatar" {
   source                  = "../../modules/gpu_mig"
   name                    = "sanctra-avatar-gpu"
@@ -131,6 +162,18 @@ module "mig_avatar" {
   docker_image            = var.avatar_image
   port                    = 9100
   labels                  = { app = "sanctra", svc = "avatar" }
+}
+
+module "mig_tts" {
+  source                = "././modules/gpu_mig"
+  name                  = "sanctra-tts-gpu"
+  region                = var.region
+  network               = var.network
+  subnetwork            = var.subnetwork
+  service_account_email = var.gpu_sa_email
+  docker_image          = var.tts_image
+  port                  = 9200
+  labels                = { app = "sanctra", svc = "tts" }
 }
 
 # --- Vertex AI Vector Search ---
